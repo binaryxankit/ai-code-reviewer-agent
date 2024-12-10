@@ -1,0 +1,23 @@
+# Ignore all files in the celerybeat-schedule directory
+celerybeat-schedule/*
+
+# Ignore all files in the __pycache__ directory
+__pycache__/*
+
+# Ignore all files in the .DS_Store directory
+.DS_Store
+
+# Ignore .env file
+.env
+
+# Ignore all files in the .venv directory
+.venv/*
+
+# Ignore pyvenv.cfg file
+pyvenv.cfg
+
+# Ignore venv directory
+venv/*
+
+# Ignore .env.example file
+.env.example
