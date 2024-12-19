@@ -69,4 +69,10 @@ FinalData = {
         }
 }
 
+summary = {
+    "total_files": 0,
+    "total_issues": 0,
+    "critical_issues": 0
+}
+
 
