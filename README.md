@@ -60,7 +60,7 @@ code-review-agent/
 
 5. **Start the Celery Worker:**
    ```bash
-   celery -A app.tasks.code_review_tasks worker --polo=solo
+   celery -A app.tasks.code_review_tasks worker --pool=solo
    ```
 
 6. **Start the FastAPI Server:**
@@ -151,5 +151,5 @@ code-review-agent/
 ## How to Start the Project
 
 1. Install the required dependencies from `app/requirements.txt`.
-2. Start the Celery worker with the command `celery -A app.tasks.code_review_tasks worker --polo=solo`.
+2. Start the Celery worker with the command `celery -A app.tasks.code_review_tasks worker --pool=solo`.
 3. Start the FastAPI server with the command `uvicorn app.main:app --reload`.
