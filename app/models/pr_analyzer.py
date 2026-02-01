@@ -3,93 +3,97 @@ from dotenv import load_dotenv
 import os
 from requests.exceptions import RequestException
 import google.generativeai as genai
-from app.config import Data, FinalData
+from app.config import summary, FinalData
+import json
 
 load_dotenv()
 
-def fetch_files_from_github(repo_url, pr_number, github_token):
+def fetch_pr_diff(repo_url: str, pr_number: int, github_token: str = None):
+    """
+    Fetches the PR diff from GitHub.
+
+    Args:
+        repo_url (str): The GitHub repository URL.
+        pr_number (int): The pull request number.
+        github_token (str, optional): GitHub token for authentication.
+
+    Returns:
+        str or None: The diff content, or None if an error occurs.
+    """
     headers = {"Authorization": f"token {github_token}"} if github_token else {}
     repo_path = repo_url.replace("https://github.com/", "")
-    api_url = f"https://api.github.com/repos/{repo_path}/pulls/{pr_number}/files"
+    api_url = f"https://api.github.com/repos/{repo_path}/pulls/{pr_number}"
 
     try:
         response = requests.get(api_url, headers=headers)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        files_data = response.json()
-        
-        files = []
-        for file in files_data:
-            if file["status"] in ["added", "modified"]:
-                raw_url = file["raw_url"]
-                try:
-                    file_content = requests.get(raw_url, headers=headers).text
-                    files.append({"name": file["filename"], "content": file_content})
-                except RequestException as e:
-                    print(f"Error fetching file content from {raw_url}: {e}")
-        return files
-
+        response.raise_for_status()
+        diff_url = response.json().get("diff_url")
+        if diff_url:
+            diff_response = requests.get(diff_url, headers=headers)
+            diff_response.raise_for_status()
+            return diff_response.text  # Return the diff content
+        else:
+            print("Error: Diff URL not found in the PR metadata.")
+            return None
     except RequestException as e:
-        print(f"Error fetching files from GitHub: {e}")
-        return []  # Return empty list on error
-    except (KeyError, ValueError) as e:
-        print(f"Error parsing GitHub response: {e}, Response: {response.text}")
-        return []
+        print(f"Error fetching PR diff: {e}")
+        return None
+
+
+def analyze_pr_diff(pr_diff: str):
+    """
+    Analyzes the PR diff using Bard for issues, bugs, style violations, and best practices.
+
+    Args:
+        pr_diff (str): The pull request diff content.
+
+    Returns:
+        dict: Analysis results or an error message.
+    """
+    bard_api_key = os.getenv("BARD_API_KEY")
+    if not bard_api_key:
+        print("Error: BARD_API_KEY not found in environment variables.")
+        return {"error": "BARD_API_KEY missing"}
+
+    # Configure GenAI with Bard API
+    genai.configure(api_key=bard_api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+
+    # Generate content using Bard
+    try:
+        response = model.generate_content(f"""
+        Analyze the following PR diff for issues, bugs, style violations, and best practices.
+        Provide suggestions for improvement. Format your response as JSON with each file, issues (type, line, description, suggestion), and a summary object:
+        {pr_diff} like {summary}
+        """)
+        cleaned_response = response.text.replace('json', '').replace('```', '')
+        return json.loads(cleaned_response)
+    except Exception as e:
+        print(f"Error analyzing PR diff: {e}")
+        return {"error": str(e)}
 
 
 def analyze_pr_code(repo_url: str, pr_number: int, github_token: str = None):
+    """
+    Main function to fetch the PR diff and analyze it.
 
-    files = fetch_files_from_github(repo_url, pr_number, github_token)
+    Args:
+        repo_url (str): The GitHub repository URL.
+        pr_number (int): The pull request number.
+        github_token (str, optional): GitHub token for authentication.
 
-    formatData = {
-        "results": {
-            "files": []
-        },
-        "summary": {
-            "total_files": 0,
-            "total_issues": 0,
-            "critical_issues": 0
-        }
-    }
+    Returns:
+        dict: The combined results of the analysis or an error message.
+    """
+    # Step 1: Fetch PR Diff
+    pr_diff = fetch_pr_diff(repo_url, pr_number, github_token)
+    if not pr_diff:
+        return {"error": "Failed to fetch PR diff"}
 
+    # Step 2: Analyze the PR Diff
+    analysis_results = analyze_pr_diff(pr_diff)
+    return analysis_results
 
-    bard_api_key = os.getenv("BARD_API_KEY")
-    if not bard_api_key:
-        print("Error: BARD_API_KEY not found in environment variables.")
-        return {"files": []}
-    
-    genai.configure(api_key=bard_api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-
-    for file in files:
-        try:
-            response = model.generate_content(f"Analyze the following code for potential issues, bugs or errors, Code Style, formatting issues, best practices and improvements. Each file with issues with type, line, description, suggestion and all this should be in array of objects and each object have name of the file and issues have the array of objects and each array of objects have type, line, description, suggestion and if there is multiple files then all files should be in array of objects and also there will be summary object which will have total files, total issues, critical issues in the last :\n{file['content']}")
-
-            cleaned = response.text.replace('json', '').replace('```', '')  
-            formatData["results"]["files"].append(cleaned)
-        except Exception as e:
-            print(f"An unexpected error occurred: {e}")
-            formatData["results"]["files"].append({"name": file['name'], "issues": f"Bard analysis failed: {e}"})
-
-    finalData = model.generate_content(f"summarise and format the following data in better. This is the response of the files {formatData} now modify it to the structure of the Data like this {Data}")
-
-    return finalData.text.replace('json', '').replace('```', '')
-
-
-def format_data(formatData):
-    bard_api_key = os.getenv("BARD_API_KEY")
-    if not bard_api_key:
-        print("Error: BARD_API_KEY not found in environment variables.")
-        return {"files": []}
-    
-    genai.configure(api_key=bard_api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-
-    try:
-        response = model.generate_content(f"summarise and format the following data in better. This is the response of the files {formatData} now modify it to the structure of the Data like this {FinalData}")
-        return response.text.replace('json', '').replace('```', '')
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        return {e}
 
 
 def format_data(formatData):

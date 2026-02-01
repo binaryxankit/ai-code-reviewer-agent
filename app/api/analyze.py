@@ -34,6 +34,6 @@ async def task_status(task_id: str):
 async def task_results(task_id: str):
     task = AsyncResult(task_id)
     if task.status == "SUCCESS":
-        return {"task_id": task.id, "status": task.status, "data": json.loads(task.result)}
+        return {"task_id": task.id, "status": task.status, "results": task.result}
     else:
         raise HTTPException(status_code=404, detail="Task not completed yet")
