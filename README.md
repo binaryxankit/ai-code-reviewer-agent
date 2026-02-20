@@ -153,3 +153,25 @@ code-review-agent/
 1. Install the required dependencies from `app/requirements.txt`.
 2. Start the Celery worker with the command `celery -A app.tasks.code_review_tasks worker --pool=solo`.
 3. Start the FastAPI server with the command `uvicorn app.main:app --reload`.
+
+## Example usage
+
+Once the API is running locally on `http://127.0.0.1:8000`, you can trigger an analysis with:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze-pr" ^
+  -H "Content-Type: application/json" ^
+  -d "{`"repo_url`": `"https://github.com/username/repo`", `"pr_number`": 123}"
+```
+
+Then poll for status:
+
+```bash
+curl "http://127.0.0.1:8000/status/<task_id>"
+```
+
+And fetch the final results:
+
+```bash
+curl "http://127.0.0.1:8000/results/<task_id>"
+```
